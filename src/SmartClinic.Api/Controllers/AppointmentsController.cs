@@ -1,3 +1,4 @@
+using Microsoft.AspNetCore.Authorization;
 using Microsoft.AspNetCore.Mvc;
 using Microsoft.EntityFrameworkCore;
 using SmartClinic.Api.Data;
@@ -5,6 +6,7 @@ using SmartClinic.Api.Models;
 
 namespace SmartClinic.Api.Controllers
 {
+    [Authorize]
     [ApiController]
     [Route("api/[controller]")]
     public class AppointmentsController : ControllerBase
