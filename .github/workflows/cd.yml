@@ -1,22 +1,23 @@
 name: CD - Deploy to Azure
 
 on:
-  workflow_dispatch:
-  push:
-    branches: [main]
+  workflow_run:
+    workflows: ["CI - Build and Test"]
+    types:
+      - completed
 
 jobs:
   deploy:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
     runs-on: ubuntu-latest
-    steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
 
-      - name: Download API artifact
+    steps:
+      - name: Download API artifact from CI run
         uses: actions/download-artifact@v4
         with:
           name: smartclinic-api
           path: ./artifacts/api
+          run-id: ${{ github.event.workflow_run.id }}
 
       - name: Azure login
         uses: azure/login@v2
@@ -30,5 +31,4 @@ jobs:
           package: "./artifacts/api"
 
       - name: Post-deployment check
-        run: |
-          echo "Deployment completed successfully to SmartClinic API on Azure."
+        run: echo "Deployment completed successfully."
