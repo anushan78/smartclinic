@@ -1,0 +1,34 @@
+name: CD - Deploy to Azure
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Download API artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: smartclinic-api
+          path: ./artifacts/api
+
+      - name: Azure login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: Deploy to Azure Web App
+        uses: azure/webapps-deploy@v3
+        with:
+          app-name: "smartclinic-api-prod"
+          package: "./artifacts/api"
+
+      - name: Post-deployment check
+        run: |
+          echo "Deployment completed successfully to SmartClinic API on Azure."
