@@ -6,6 +6,7 @@ using System.Text;
 using Microsoft.OpenApi.Models;
 using Microsoft.AspNetCore.Identity;
 using SmartClinic.Api.Models;
+using SmartClinic.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 var jwtSettings = builder.Configuration.GetSection("Jwt");
@@ -75,6 +76,8 @@ builder.Services.AddSwaggerGen(c =>
 
 // Add App Insights
 builder.Services.AddApplicationInsightsTelemetry();
+// Add BlobService
+builder.Services.AddScoped<BlobService>();
 
 var app = builder.Build();
 
