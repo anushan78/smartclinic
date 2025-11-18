@@ -9,6 +9,13 @@ using SmartClinic.Api.Models;
 using SmartClinic.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
+
+// Ensure environment variables override appsettings.json
+builder.Configuration
+.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+.AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+.AddEnvironmentVariables();
+
 var jwtSettings = builder.Configuration.GetSection("Jwt");
 var jwtKey = jwtSettings.GetValue<string>("Key");
 
