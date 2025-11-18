@@ -10,29 +10,34 @@ using SmartClinic.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// Ensure environment variables override appsettings.json
+// -------------------- Configuration --------------------
 builder.Configuration
-.AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-.AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-.AddEnvironmentVariables();
+    .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+    .AddEnvironmentVariables(); // Azure App Settings override JSON
 
-var jwtSettings = builder.Configuration.GetSection("Jwt");
-var jwtKey = jwtSettings.GetValue<string>("Key");
+// -------------------- EF Core --------------------
+var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
+if (string.IsNullOrWhiteSpace(connectionString))
+    throw new Exception("DefaultConnection is missing. Set it in Azure App Service.");
 
-// Add EF Core DbContext
 builder.Services.AddDbContext<ClinicContext>(options =>
-    options.UseSqlServer(builder.Configuration.GetConnectionString("DefaultConnection")) );
+    options.UseSqlServer(connectionString));
 
-// Add Identity (uses sql server via ClinicContext)
+// -------------------- Identity --------------------
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ClinicContext>()
     .AddDefaultTokenProviders();
 
-builder.Services.AddAuthentication(options =>
-    {
-        options.DefaultAuthenticateScheme = JwtBearerDefaults.AuthenticationScheme;
-        options.DefaultChallengeScheme = JwtBearerDefaults.AuthenticationScheme;
-    })
+// -------------------- JWT --------------------
+var jwtSection = builder.Configuration.GetSection("Jwt");
+var jwtKey = jwtSection["Key"];
+var jwtIssuer = jwtSection["Issuer"];
+var jwtAudience = jwtSection["Audience"];
+if (string.IsNullOrWhiteSpace(jwtKey) || string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience))
+    throw new Exception("JWT config missing. Set Jwt:Key, Jwt:Issuer, Jwt:Audience in Azure App Service.");
+
+builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
     {
         options.TokenValidationParameters = new TokenValidationParameters
@@ -41,13 +46,13 @@ builder.Services.AddAuthentication(options =>
             ValidateAudience = true,
             ValidateLifetime = true,
             ValidateIssuerSigningKey = true,
-            ValidIssuer = jwtSettings.GetValue<string>("Issuer"),
-            ValidAudience = jwtSettings.GetValue<string>("Audience"),
+            ValidIssuer = jwtIssuer,
+            ValidAudience = jwtAudience,
             IssuerSigningKey = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(jwtKey))
         };
     });
 
-// Add Controllers and Swagger
+// -------------------- Controllers & Swagger --------------------
 builder.Services.AddControllers();
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
@@ -81,34 +86,34 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// Add App Insights
+// -------------------- App Insights & Blob --------------------
 builder.Services.AddApplicationInsightsTelemetry();
-// Add BlobService
 builder.Services.AddScoped<BlobService>();
 
 var app = builder.Build();
 
-// Configure the HTTP request pipeline.
+// -------------------- Middleware --------------------
 app.UseSwagger();
 app.UseSwaggerUI();
-
 app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers();
 
-using (var scope = app.Services.CreateScope())
+// -------------------- Seed Roles --------------------
+await SeedRolesAsync(app);
+
+app.Run();
+
+// -------------------- SeedRolesAsync --------------------
+static async Task SeedRolesAsync(WebApplication app)
 {
+    using var scope = app.Services.CreateScope();
     var roleManager = scope.ServiceProvider.GetRequiredService<RoleManager<IdentityRole>>();
-
     string[] roles = { "Admin", "Doctor", "Receptionist" };
-
     foreach (var role in roles)
     {
         if (!await roleManager.RoleExistsAsync(role))
-        {
             await roleManager.CreateAsync(new IdentityRole(role));
-        }
     }
 }
-app.Run();
