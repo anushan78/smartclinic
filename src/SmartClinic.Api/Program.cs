@@ -10,32 +10,38 @@ using SmartClinic.Api.Services;
 
 var builder = WebApplication.CreateBuilder(args);
 
-// -------------------- Configuration --------------------
+// Load configuration
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
     .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
-    .AddEnvironmentVariables(); // Azure App Settings override JSON
+    .AddEnvironmentVariables();
 
-// -------------------- EF Core --------------------
-var connectionString = builder.Configuration.GetConnectionString("DefaultConnection");
-if (string.IsNullOrWhiteSpace(connectionString))
-    throw new Exception("DefaultConnection is missing. Set it in Azure App Service.");
+// -------------------- Validate critical settings --------------------
+var jwtKey = builder.Configuration["Jwt:Key"];
+var jwtIssuer = builder.Configuration["Jwt:Issuer"];
+var jwtAudience = builder.Configuration["Jwt:Audience"];
+var connStr = builder.Configuration.GetConnectionString("DefaultConnection");
+var blobConn = builder.Configuration["BlobStorage:ConnectionString"];
+var blobContainer = builder.Configuration["BlobStorage:ContainerName"];
 
+if (string.IsNullOrWhiteSpace(jwtKey) ||
+    string.IsNullOrWhiteSpace(jwtIssuer) ||
+    string.IsNullOrWhiteSpace(jwtAudience))
+    throw new Exception("JWT settings missing. Set Jwt__Key, Jwt__Issuer, Jwt__Audience in Azure App Settings.");
+
+if (string.IsNullOrWhiteSpace(connStr))
+    throw new Exception("DefaultConnection missing. Set ConnectionStrings__DefaultConnection in Azure App Settings.");
+
+if (string.IsNullOrWhiteSpace(blobConn) || string.IsNullOrWhiteSpace(blobContainer))
+    throw new Exception("BlobStorage settings missing. Set BlobStorage__ConnectionString and BlobStorage__ContainerName in Azure App Settings.");
+
+// -------------------- Services --------------------
 builder.Services.AddDbContext<ClinicContext>(options =>
-    options.UseSqlServer(connectionString));
+    options.UseSqlServer(connStr));
 
-// -------------------- Identity --------------------
 builder.Services.AddIdentity<ApplicationUser, IdentityRole>()
     .AddEntityFrameworkStores<ClinicContext>()
     .AddDefaultTokenProviders();
-
-// -------------------- JWT --------------------
-var jwtSection = builder.Configuration.GetSection("Jwt");
-var jwtKey = jwtSection["Key"];
-var jwtIssuer = jwtSection["Issuer"];
-var jwtAudience = jwtSection["Audience"];
-if (string.IsNullOrWhiteSpace(jwtKey) || string.IsNullOrWhiteSpace(jwtIssuer) || string.IsNullOrWhiteSpace(jwtAudience))
-    throw new Exception("JWT config missing. Set Jwt:Key, Jwt:Issuer, Jwt:Audience in Azure App Service.");
 
 builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
     .AddJwtBearer(options =>
@@ -52,14 +58,14 @@ builder.Services.AddAuthentication(JwtBearerDefaults.AuthenticationScheme)
         };
     });
 
-// -------------------- Controllers & Swagger --------------------
 builder.Services.AddControllers();
+
+// -------------------- Swagger with JWT --------------------
 builder.Services.AddEndpointsApiExplorer();
 builder.Services.AddSwaggerGen(c =>
 {
     c.SwaggerDoc("v1", new OpenApiInfo { Title = "SmartClinic API", Version = "v1" });
 
-    // Enable JWT Auth
     c.AddSecurityDefinition("Bearer", new OpenApiSecurityScheme
     {
         Description = "Enter JWT token: Bearer {your token}",
@@ -86,7 +92,6 @@ builder.Services.AddSwaggerGen(c =>
     });
 });
 
-// -------------------- App Insights & Blob --------------------
 builder.Services.AddApplicationInsightsTelemetry();
 builder.Services.AddScoped<BlobService>();
 
@@ -105,7 +110,6 @@ await SeedRolesAsync(app);
 
 app.Run();
 
-// -------------------- SeedRolesAsync --------------------
 static async Task SeedRolesAsync(WebApplication app)
 {
     using var scope = app.Services.CreateScope();
