@@ -416,3 +416,9 @@ FodyWeavers.xsd
 *.msix
 *.msm
 *.msp
+
+.DS_Store
+.vscode/
+
+appsettings.Development.json
+appsettings.Development.Local.json
