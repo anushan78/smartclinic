@@ -13,7 +13,8 @@ var builder = WebApplication.CreateBuilder(args);
 // Load configuration
 builder.Configuration
     .AddJsonFile("appsettings.json", optional: false, reloadOnChange: true)
-    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true)
+    .AddJsonFile($"appsettings.{builder.Environment.EnvironmentName}.json", optional: true, reloadOnChange: true)
+    .AddJsonFile("appsettings.Development.Local.json", optional: true, reloadOnChange: true)
     .AddEnvironmentVariables();
 
 // -------------------- Validate critical settings --------------------
